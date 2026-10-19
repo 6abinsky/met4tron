@@ -8,7 +8,10 @@ def get(url,accept='application/vnd.github+json'):
     with urllib.request.urlopen(req,timeout=90) as r: return r.read()
 base='https://api.github.com/repos/'+os.environ['REPO']; releases=json.loads(get(base+'/releases?per_page=100'))
 assets=[a for r in releases if r['tag_name'].startswith('datos-') for a in r['assets'] if a['name']=='metatron-web.zip']
-if not assets: raise SystemExit('No hay lote recibido')
+if not assets:
+    with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('publicar=false\n')
+    print('No hay lote recibido; esperando envío desde Streamlit.')
+    raise SystemExit(0)
 asset=max(assets,key=lambda a:a['created_at']); raw=get(asset['url'],'application/octet-stream'); out=Path('public'); out.mkdir(exist_ok=True)
 with zipfile.ZipFile(io.BytesIO(raw)) as z:
     for name in z.namelist():
@@ -28,7 +31,8 @@ if os.environ.get('MONTO',''):
 
 if now<datetime.fromisoformat(data['publicar_desde']):
     with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('publicar=false\n')
-    raise SystemExit('Lote recibido: espera hasta las 20:00 de Bolivia')
+    print('Lote recibido: espera hasta las 20:00 de Bolivia')
+    raise SystemExit(0)
 data['publicaciones']=[r for r in data['publicaciones'] if now-timedelta(days=7)<=datetime.fromisoformat(r['fecha'])<=now]
 if data.get('reporte') and now-datetime.fromisoformat(data['reporte']['fin'])>timedelta(hours=24): data['reporte']=None
 p.write_text(json.dumps(data,ensure_ascii=False),encoding='utf-8')
