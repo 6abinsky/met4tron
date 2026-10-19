@@ -1,31 +1,58 @@
 # MET4TRON
 
-Monitoreo y análisis de publicaciones públicas de Bolivia. Proyecto de 6abinsky.
+### Monitoreo y análisis de la conversación pública digital en Bolivia
 
-## Función de este repositorio
+MET4TRON es una herramienta que organiza publicaciones de redes sociales y las transforma en información útil para comprender la agenda pública, identificar temas emergentes y seguir la evolución de la cobertura digital.
 
-Repositorio privado de recepción y publicación. Streamlit se ejecuta en Linux Mint; la base SQLite, las sesiones y las claves de IA permanecen en el equipo local. No subas el ZIP completo de instalación.
+Combina monitoreo, inteligencia artificial, búsqueda avanzada y visualización de datos para facilitar el trabajo de comunicación, investigación y análisis de coyuntura.
 
-- `github_publicar.py`: recibe el paquete web desde Releases, respeta la fecha de publicación y conserva siete días de publicaciones.
-- `.github/workflows/publicar.yml`: prepara y publica mediante GitHub Pages a las 20:00 de Bolivia (00:00 UTC). GitHub puede retrasar ejecuciones programadas.
-- `.gitignore`: excluye bases de datos y configuración privada; no sustituye una revisión antes de subir archivos.
+### Analizar temas y sentimientos
 
-## Conectar Streamlit
+Utiliza inteligencia artificial para clasificar publicaciones, identificar palabras clave y reconocer menciones a instituciones y autoridades. Distingue el sentimiento general del contenido del sentimiento expresado hacia los actores mencionados.
 
-En Configuración GitHub de MET4TRON, usa `6abinsky/met4tron`. Guarda el token únicamente en tu instalación local. El envío crea un Release privado `datos-*` con el archivo `metatron-web.zip`, que contiene los recursos web y los datos seleccionados; no envía SQLite ni claves de IA.
+### Comprender la agenda territorial
 
-El programa y workflow ya están instalados. No es necesario volver a instalarlos desde la aplicación. Sin lotes, el workflow termina correctamente sin desplegar.
+Ofrece análisis de alcance nacional, departamental y municipal, con un espacio específico para El Alto y una sección internacional. Permite explorar qué asuntos predominan en cada territorio y cómo se relacionan con la agenda nacional.
 
-## Activar la web
+### Explorar la conversación
 
-En Settings → Pages, selecciona GitHub Actions como fuente. La disponibilidad de Pages en repositorios privados depende del plan de GitHub; si GitHub solicita un cambio de plan, no hagas público este repositorio para evitar exponer lotes pendientes. La activación de Pages aún debe completarse y verificarse.
+Su buscador permite combinar palabras, frases, filtros y operadores para localizar publicaciones y examinar la evolución de un tema durante un período determinado.
 
-Tras enviar el primer lote desde MET4TRON, el workflow podrá publicar a partir de su fecha `publicar_desde`. Comprueba el resultado en Actions. La instalación del workflow por sí sola no significa que la web ya esté publicada.
+### Visualizar resultados
 
-## Linux Mint y base anterior
+Presenta tendencias, rankings de publicaciones, nubes de palabras e indicadores de sentimiento. Estas vistas ayudan a reconocer los contenidos con mayor interacción y los cambios en la cobertura recopilada.
 
-Utiliza `instalar_linux_mint.sh` e `iniciar_linux.sh` del paquete local entregado. Con la aplicación anterior cerrada, conserva una copia de `met4tron_flex_data` y señala esa carpeta al configurador. No pegues el contenido de SQLite dentro de un archivo Python. La migración crea un respaldo y conserva la tabla antigua.
+### Elaborar informes
 
-## Datos y donaciones
+Genera reportes con síntesis narrativas, publicaciones destacadas y análisis FODA asistido por inteligencia artificial. Los resultados pueden exportarse a Word, PDF, imágenes y HTML interactivo.
 
-Los datos se reciben como assets de Releases privados, no en commits. El workflow recorta publicaciones de más de siete días y retira el reporte cuando supera 24 horas. La actualización manual del campo `monto` reutiliza datos ya publicados; requiere una web previamente desplegada.
+## Una herramienta para distintos ámbitos
+
+- **Comunicación institucional:** seguimiento de temas y menciones relevantes.
+- **Periodismo e investigación:** exploración de fuentes, acontecimientos y tendencias.
+- **Análisis de coyuntura:** lectura de la agenda nacional y territorial.
+- **Gestión de comunicación:** preparación de informes y seguimiento de la cobertura digital.
+
+## Del contenido al contexto
+
+MET4TRON propone un recorrido de trabajo sencillo:
+
+1. Reunir publicaciones.
+2. Organizar y clasificar el contenido.
+3. Explorar temas, territorios y actores.
+4. Interpretar tendencias e indicadores.
+5. Elaborar y compartir informes.
+
+Su propósito es reducir el tiempo dedicado a ordenar información y facilitar una lectura contextualizada de los datos.
+
+## Cómo interpretar los resultados
+
+Los indicadores describen las publicaciones recopiladas y sus interacciones. No equivalen a encuestas de opinión ni representan por sí solos a toda la población.
+
+Los análisis generados con inteligencia artificial sirven como apoyo y deben revisarse con criterio profesional, considerando las fuentes, el período y la cobertura disponible.
+
+---
+
+**MET4TRON · Información organizada para comprender la conversación pública.**
+
+Desarrollado por **Gabriel Rodriguez Olivera — 6abinsky**.
