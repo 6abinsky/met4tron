@@ -1,0 +1,48 @@
+# Metatron generado por 6abinsky. Instalar en repositorio PRIVADO de recepción.
+name: Publicar MET4TRON
+on:
+  schedule:
+    - cron: '0 0 * * *' # 20:00 America/La_Paz; GitHub puede retrasar la ejecución.
+  workflow_dispatch:
+    inputs:
+      monto:
+        description: "Actualizar solo donaciones sobre el sitio ya publicado"
+        required: false
+        type: string
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: metatron-pages
+  cancel-in-progress: false
+jobs:
+  preparar:
+    runs-on: ubuntu-latest
+    outputs:
+      publicar: ${{ steps.preparar.outputs.publicar }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descargar lote privado, aplicar embargo y recortar siete días
+        id: preparar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MONTO: ${{ inputs.monto }}
+        run: python github_publicar.py
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.preparar.outputs.publicar == 'true'
+        with:
+          path: public
+          retention-days: 1
+  desplegar:
+    needs: preparar
+    if: needs.preparar.outputs.publicar == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Desplegar
+        id: deployment
+        uses: actions/deploy-pages@v4
