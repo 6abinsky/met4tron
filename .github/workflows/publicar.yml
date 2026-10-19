@@ -1,12 +1,15 @@
-# Metatron generado por 6abinsky. Instalar en repositorio PRIVADO de recepción.
+# Metatron generado por 6abinsky
 name: Publicar MET4TRON
 on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'github_publicar.py', '.github/workflows/publicar.yml']
   schedule:
-    - cron: '0 0 * * *' # 20:00 America/La_Paz; GitHub puede retrasar la ejecución.
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       monto:
-        description: "Actualizar solo donaciones sobre el sitio ya publicado"
+        description: Monto recaudado en bolivianos
         required: false
         type: string
 permissions:
@@ -17,32 +20,25 @@ concurrency:
   group: metatron-pages
   cancel-in-progress: false
 jobs:
-  preparar:
-    runs-on: ubuntu-latest
-    outputs:
-      publicar: ${{ steps.preparar.outputs.publicar }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Descargar lote privado, aplicar embargo y recortar siete días
-        id: preparar
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          MONTO: ${{ inputs.monto }}
-        run: python github_publicar.py
-      - uses: actions/upload-pages-artifact@v3
-        if: steps.preparar.outputs.publicar == 'true'
-        with:
-          path: public
-          retention-days: 1
-  desplegar:
-    needs: preparar
-    if: needs.preparar.outputs.publicar == 'true'
+  publicar:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - name: Desplegar
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        id: pages
+      - name: Preparar portal y depurar siete días
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+          MONTO: ${{ inputs.monto }}
+        run: python github_publicar.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+          retention-days: 1
+      - uses: actions/deploy-pages@v4
+        id: deploy
