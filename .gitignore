@@ -1,0 +1,15 @@
+# Datos y configuración exclusivamente locales
+.env
+.env.*
+!.env.example
+private_defaults.json
+instalacion_local.json
+met4tron_flex_data/
+*.sqlite*
+*.db
+*.zip
+public/
+.venv/
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
