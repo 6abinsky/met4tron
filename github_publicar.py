@@ -39,6 +39,22 @@ def request(url, token=None):
     if token: headers['Authorization'] = 'Bearer '+token
     with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=90) as r: return r.read()
 
+def compact_asset(asset, incoming, token, now, base):
+    """Recorta también el lote de recepción, sin conservar datos viejos en Git."""
+    clean=prune(incoming,now)
+    if clean['publicaciones']==incoming.get('publicaciones',[]) and clean['reportes']==incoming.get('reportes',[]): return
+    archive=io.BytesIO()
+    with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
+        z.writestr('data.json',json.dumps(clean,ensure_ascii=False))
+    def mutate(method,url,body=None,ctype='application/json'):
+        req=urllib.request.Request(url,data=body,method=method,headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','Content-Type':ctype})
+        with urllib.request.urlopen(req,timeout=90) as r:
+            raw=r.read(); return json.loads(raw) if raw else None
+    url=asset['_upload_url'].split('{')[0]+'?name=pruned-'+str(uuid.uuid4())+'.zip'
+    uploaded=mutate('POST',url,archive.getvalue(),'application/zip')
+    mutate('DELETE',asset['url'])
+    mutate('PATCH',uploaded['url'],json.dumps({'name':'metatron-web.zip'}).encode())
+
 def main():
     now=datetime.now(timezone.utc)
     repo=os.environ['REPO']; token=os.environ['GH_TOKEN']; base='https://api.github.com/repos/'+repo
@@ -55,7 +71,9 @@ def main():
     for release in releases:
         if not release.get('tag_name','').startswith('datos-'): continue
         for asset in release.get('assets',[]):
-            if asset['name']=='metatron-web.zip': candidates.append(asset)
+            if asset['name']=='metatron-web.zip':
+                asset['_upload_url']=release['upload_url']
+                candidates.append(asset)
     for asset in sorted(candidates,key=lambda a:a['created_at'],reverse=True):
         req=urllib.request.Request(asset['url'],headers={'Authorization':'Bearer '+token,'Accept':'application/octet-stream'})
         with urllib.request.urlopen(req,timeout=90) as r: raw=r.read(50*1024*1024+1)
@@ -64,7 +82,8 @@ def main():
             if z.getinfo('data.json').file_size>100*1024*1024: raise ValueError('JSON demasiado grande')
             incoming=json.loads(z.read('data.json'))
         if date(incoming['publicar_desde']) > now: continue
-        if incoming.get('generado') and (not data.get('generado') or date(incoming['generado']) >= date(data['generado'])):
+        compact_asset(asset,incoming,token,now,base)
+        if incoming.get('generado') and (not data.get('generado') or date(incoming['generado']) > date(data['generado'])):
             data=incoming
             data['reportes']=previous.get('reportes',[])+([previous['reporte']] if previous.get('reporte') else [])
         break
