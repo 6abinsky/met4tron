@@ -1,9 +1,15 @@
-"""Metatron generado por 6abinsky: portal público con ventana móvil de siete días."""
+"""Metatron generado por 6abinsky: portal público con ventana móvil de siete días.
+
+Extrae TODOS los archivos del ZIP (index.html, style.css, render.js, data.json,
+etc.) a public/, en lugar de copiar site/ — el ZIP siempre está al día porque
+lo genera paquete_web() desde web/ local.
+"""
 import copy, io, json, os, shutil, urllib.request, urllib.error, zipfile, uuid
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 FIELDS = set('id fecha mensaje titulo resumen link red perfil interaccion_total categoria_principal categorias_secundarias palabras_clave sentimiento departamento_principal departamentos_secundarios municipios instituciones autoridades territorio_carga tipo_metrica estado_ia'.split())
+
 def date(value):
     d = datetime.fromisoformat(value.replace('Z', '+00:00'))
     if d.tzinfo is None: raise ValueError('Fecha sin zona horaria')
@@ -23,7 +29,6 @@ def prune(data, now):
     data['publicaciones'] = list(unique.values())
     reports = {}
     for report in data.get('reportes', []) + ([data['reporte']] if data.get('reporte') else []):
-        # Un informe no debe conservar publicaciones de fuera de la ventana.
         if cut <= date(report['inicio']) <= date(report['fin']) <= now:
             for section in report.get('secciones', []):
                 section['bloques'] = [b for b in section.get('bloques',[]) if not b.get('privado') and 'foda' not in b.get('titulo','').lower() and 'cuentas' not in b.get('titulo','').lower()]
@@ -39,63 +44,101 @@ def request(url, token=None):
     if token: headers['Authorization'] = 'Bearer '+token
     with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=90) as r: return r.read()
 
-def compact_asset(asset, incoming, token, now, base):
-    """Recorta también el lote de recepción, sin conservar datos viejos en Git."""
-    clean=prune(incoming,now)
-    if clean['publicaciones']==incoming.get('publicaciones',[]) and clean['reportes']==incoming.get('reportes',[]): return
-    archive=io.BytesIO()
-    with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
-        z.writestr('data.json',json.dumps(clean,ensure_ascii=False))
-    def mutate(method,url,body=None,ctype='application/json'):
-        req=urllib.request.Request(url,data=body,method=method,headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','Content-Type':ctype})
-        with urllib.request.urlopen(req,timeout=90) as r:
-            raw=r.read(); return json.loads(raw) if raw else None
-    url=asset['_upload_url'].split('{')[0]+'?name=pruned-'+str(uuid.uuid4())+'.zip'
-    uploaded=mutate('POST',url,archive.getvalue(),'application/zip')
-    mutate('DELETE',asset['url'])
-    mutate('PATCH',uploaded['url'],json.dumps({'name':'metatron-web.zip'}).encode())
-
 def main():
-    now=datetime.now(timezone.utc)
-    repo=os.environ['REPO']; token=os.environ['GH_TOKEN']; base='https://api.github.com/repos/'+repo
-    data={'generado':None,'publicar_desde':now.isoformat(),'publicaciones':[],'reportes':[],'reporte':None,'donaciones':{'recaudado':0,'meta':4000},'contacto':''}
-    # Recuperar únicamente la versión pública; nunca escribir los datos en commits.
-    site=os.environ['SITE_URL'].rstrip('/')
-    try:
-        data=json.loads(request(site+'/data.json'))
-    except urllib.error.HTTPError as e:
-        if e.code != 404: raise
-    previous=copy.deepcopy(data)
-    releases=json.loads(request(base+'/releases?per_page=100',token))
-    candidates=[]
-    for release in releases:
-        if not release.get('tag_name','').startswith('datos-'): continue
-        for asset in release.get('assets',[]):
-            if asset['name']=='metatron-web.zip':
-                asset['_upload_url']=release['upload_url']
-                candidates.append(asset)
-    for asset in sorted(candidates,key=lambda a:a['created_at'],reverse=True):
-        req=urllib.request.Request(asset['url'],headers={'Authorization':'Bearer '+token,'Accept':'application/octet-stream'})
-        with urllib.request.urlopen(req,timeout=90) as r: raw=r.read(50*1024*1024+1)
-        if len(raw)>50*1024*1024: raise ValueError('Lote demasiado grande')
-        with zipfile.ZipFile(io.BytesIO(raw)) as z:
-            if z.getinfo('data.json').file_size>100*1024*1024: raise ValueError('JSON demasiado grande')
-            incoming=json.loads(z.read('data.json'))
-        if date(incoming['publicar_desde']) > now: continue
-        compact_asset(asset,incoming,token,now,base)
-        if incoming.get('generado') and (not data.get('generado') or date(incoming['generado']) > date(data['generado'])):
-            data=incoming
-            data['reportes']=previous.get('reportes',[])+([previous['reporte']] if previous.get('reporte') else [])
-        break
-    if os.environ.get('MONTO',''):
-        # Las donaciones no adelantan la publicación de lotes pendientes.
-        amount=float(os.environ['MONTO'])
-        if not 0<=amount<1e12: raise ValueError('Monto inválido')
-        data.setdefault('donaciones',{})['recaudado']=amount
-    data=prune(data,now)
-    shutil.copytree('site','public',dirs_exist_ok=True)
-    Path('public/data.json').write_text(json.dumps(data,ensure_ascii=False),encoding='utf-8')
-    Path('public/.nojekyll').touch()
-    print('Portal preparado:',len(data['publicaciones']),'publicaciones;',len(data['reportes']),'informes.')
+    now = datetime.now(timezone.utc)
+    repo = os.environ['REPO']
+    token = os.environ['GH_TOKEN']
+    base = 'https://api.github.com/repos/' + repo
 
-if __name__=='__main__': main()
+    # 1) Buscar el ZIP más reciente en todos los releases
+    releases = json.loads(request(base + '/releases?per_page=100', token))
+    candidates = []
+    for release in releases:
+        if not release.get('tag_name', '').startswith('datos-'):
+            continue
+        for asset in release.get('assets', []):
+            if asset['name'] == 'metatron-web.zip':
+                candidates.append(asset)
+
+    if not candidates:
+        raise SystemExit('No hay lote recibido')
+
+    asset = max(candidates, key=lambda a: a['created_at'])
+    print(f'[MET4TRON] Asset elegido: {asset["name"]} · creado: {asset["created_at"]}')
+
+    # 2) Descargar el ZIP
+    req = urllib.request.Request(asset['url'], headers={
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/octet-stream',
+    })
+    with urllib.request.urlopen(req, timeout=90) as r:
+        raw = r.read(50 * 1024 * 1024 + 1)
+    if len(raw) > 50 * 1024 * 1024:
+        raise ValueError('Lote demasiado grande')
+
+    # 3) Verificar estructura y extraer TODOS los archivos a public/
+    out = Path('public')
+    out.mkdir(exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(raw)) as z:
+        names = z.namelist()
+        print(f'[MET4TRON] Archivos en el ZIP: {names}')
+        if 'data.json' not in names:
+            raise ValueError('El ZIP no contiene data.json')
+        for name in names:
+            p = Path(name)
+            if p.is_absolute() or '..' in p.parts:
+                raise ValueError('Archivo inseguro: ' + name)
+        # Verificar que el ZIP contiene los archivos web clave
+        faltantes = [r for r in ['index.html','style.css','render.js'] if r not in names]
+        if faltantes:
+            print(f'[MET4TRON] ADVERTENCIA: el ZIP no contiene {faltantes}. '
+                  f'Se intentará el fallback desde site/ (puede estar desactualizado).')
+        z.extractall(out)
+
+    # 4) Fallback solo si el ZIP no trajo el archivo (para ZIP podados antiguos)
+    with zipfile.ZipFile(io.BytesIO(raw)) as z:
+        for required in ['index.html','style.css','render.js','search.js','app.js']:
+            if required not in z.namelist() and Path('site', required).exists():
+                shutil.copy2(Path('site', required), out / required)
+                print(f'[MET4TRON] Fallback desde site/: {required}')
+
+    # 5) Leer y podar data.json
+    data = json.loads((out / 'data.json').read_text(encoding='utf-8'))
+
+    # 6) Preservar reportes históricos del data.json público anterior
+    try:
+        previous = json.loads(request(os.environ['SITE_URL'].rstrip('/') + '/data.json'))
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+        previous = {}
+    incoming = data
+    if previous:
+        prev_reportes = list(previous.get('reportes', []))
+        if previous.get('reporte'):
+            prev_reportes.append(previous['reporte'])
+        # Deduplicar por id o por fin
+        seen = set()
+        merged = []
+        for r in prev_reportes + ([incoming['reporte']] if incoming.get('reporte') else []):
+            k = r.get('id') or r.get('fin')
+            if k in seen: continue
+            seen.add(k); merged.append(r)
+        data['reportes'] = merged
+
+    # 7) Aplicar monto si viene
+    if os.environ.get('MONTO', ''):
+        amount = float(os.environ['MONTO'])
+        if not 0 <= amount < 1e12:
+            raise ValueError('Monto inválido')
+        data.setdefault('donaciones', {})['recaudado'] = amount
+
+    # 8) Podar y guardar
+    data = prune(data, now)
+    (out / 'data.json').write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+    (out / '.nojekyll').touch()
+
+    print(f'[MET4TRON] Portal preparado: {len(data["publicaciones"])} publicaciones; {len(data["reportes"])} informes.')
+
+if __name__ == '__main__':
+    main()
